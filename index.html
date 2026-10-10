@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Погода</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2d6cdf">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+body{font:16px system-ui,sans-serif;margin:0 auto;padding:16px;background:#f4f6f8;color:#111;max-width:480px}
+@media(prefers-color-scheme:dark){body{background:#111;color:#eee}.c{background:#1c1c1e!important}}
+.c{background:#fff;border-radius:12px;padding:14px;margin:10px 0}
+.t{font-size:56px;font-weight:600}
+.s{opacity:.65;font-size:13px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.g div{background:rgba(127,127,127,.12);border-radius:8px;padding:8px}
+.g b{display:block;font-size:18px}
+.d{display:grid;grid-template-columns:52px 1fr auto;gap:8px;padding:8px 0;border-top:1px solid rgba(127,127,127,.2);align-items:center}
+.d:first-of-type{border-top:0}
+.d small{display:block;opacity:.65;font-size:12px}
+button{font:inherit;padding:12px;border:0;border-radius:10px;background:#2d6cdf;color:#fff;width:100%}
+</style>
+</head>
+<body>
+<div class="c" id="now">Загрузка…</div>
+<div class="c" id="days"></div>
+<div class="s" id="st"></div>
+<p><button onclick="go()">Обновить</button></p>
+<script>
+var W={0:["☀️","Ясно"],1:["🌤","Малооблачно"],2:["⛅","Облачно"],3:["☁️","Пасмурно"],45:["🌫","Туман"],48:["🌫","Туман"],51:["🌦","Морось"],53:["🌦","Морось"],55:["🌦","Морось"],56:["🌧","Ледяная морось"],57:["🌧","Ледяная морось"],61:["🌧","Дождь"],63:["🌧","Дождь"],65:["🌧","Сильный дождь"],66:["🌧","Ледяной дождь"],67:["🌧","Ледяной дождь"],71:["🌨","Снег"],73:["🌨","Снег"],75:["❄️","Сильный снег"],77:["🌨","Снежная крупа"],80:["🌦","Ливень"],81:["🌧","Ливень"],82:["⛈","Сильный ливень"],85:["🌨","Снегопад"],86:["❄️","Сильный снегопад"],95:["⛈","Гроза"],96:["⛈","Гроза с градом"],99:["⛈","Гроза с градом"]};
+function w(c){return W[c]||["❔","—"]}
+function dir(a){return["С","СВ","В","ЮВ","Ю","ЮЗ","З","СЗ"][Math.round(a/45)%8]}
+var $=function(i){return document.getElementById(i)};
+function show(d,note){
+  var c=d.current,x=d.daily,n=w(c.weather_code);
+  $("now").innerHTML='<div class="s">'+note+'</div><div class="t">'+n[0]+' '+Math.round(c.temperature_2m)+'°</div>'+n[1]+
+   '<div class="s">Ощущается как '+Math.round(c.apparent_temperature)+'°</div>'+
+   '<div class="g"><div>💨 Ветер<b>'+Math.round(c.wind_speed_10m)+' м/с '+dir(c.wind_direction_10m)+'</b></div>'+
+   '<div>💧 Влажность<b>'+c.relative_humidity_2m+'%</b></div>'+
+   '<div>🌧 Осадки сейчас<b>'+c.precipitation+' мм</b></div>'+
+   '<div>🎈 Давление<b>'+Math.round(c.pressure_msl*0.75006)+' мм рт.ст.</b></div></div>';
+  var h="";
+  for(var i=0;i<x.time.length;i++){
+    var dt=new Date(x.time[i]+"T12:00").toLocaleDateString("ru",{weekday:"short",day:"numeric"});
+    h+='<div class="d"><span>'+dt+'</span><span>'+w(x.weather_code[i])[0]+' '+Math.round(x.temperature_2m_min[i])+'…'+Math.round(x.temperature_2m_max[i])+'°'+
+    '<small>💨 до '+Math.round(x.wind_speed_10m_max[i])+' м/с</small></span>'+
+    '<span style="text-align:right">'+(x.precipitation_probability_max[i]||0)+'%<small>'+x.precipitation_sum[i]+' мм</small></span></div>';
+  }
+  $("days").innerHTML=h;
+}
+function load(lat,lon,note){
+  var u="https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+
+  "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,precipitation,pressure_msl"+
+  "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max"+
+  "&timezone=auto&forecast_days=7&wind_speed_unit=ms";
+  var ac=new AbortController(),tm=setTimeout(function(){ac.abort()},20000);
+  fetch(u,{signal:ac.signal}).then(function(r){return r.json()}).then(function(d){
+    clearTimeout(tm);
+    try{localStorage.p2=JSON.stringify({d:d,t:Date.now(),n:note})}catch(e){}
+    show(d,note+" · "+new Date().toLocaleTimeString("ru",{hour:"2-digit",minute:"2-digit"}));
+    $("st").textContent="";
+  }).catch(function(){
+    $("st").textContent="Нет связи. Показаны последние сохранённые данные.";
+    cache();
+  });
+}
+function cache(){
+  try{var p=JSON.parse(localStorage.p2);
+    show(p.d,p.n+" · сохранено "+new Date(p.t).toLocaleString("ru",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}));
+  }catch(e){$("now").textContent="Нет данных. Нужен интернет хотя бы один раз."}
+}
+function go(){
+  $("st").textContent="Определяю местоположение…";
+  var fb=function(){load(53.78,82.31,"Сузун (по умолчанию)")};
+  if(!navigator.geolocation)return fb();
+  navigator.geolocation.getCurrentPosition(function(p){
+    load(p.coords.latitude.toFixed(2),p.coords.longitude.toFixed(2),"Ваше местоположение");
+  },fb,{timeout:15000,maximumAge:3600000});
+}
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){});
+cache();go();
+</script>
+</body>
+</html>
