@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: true
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -42,3 +49,11 @@ jobs:
         with:
           name: pogoda-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish APK as release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk pogoda.apk
+          gh release delete latest --cleanup-tag -y || true
+          gh release create latest pogoda.apk --title "Погода (APK)" --notes "Debug-сборка приложения Погода"
